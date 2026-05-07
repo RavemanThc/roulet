@@ -3,211 +3,41 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
     <title>Рулетка</title>
-    <audio id="spinSound" src="spin.mp3"></audio>
-    <style>
-      body {
-        margin: 0;
-        padding: 20px;
-        font-family: Arial, sans-serif;
-        background: #121212;
-        color: white;
 
-        display: flex;
-        justify-content: center;
-        align-items: flex-start;
-        gap: 40px;
-        min-height: 100vh;
-      }
-
-      .wheel-container {
-        position: relative;
-      }
-
-      canvas {
-        background: white;
-        border-radius: 50%;
-      }
-
-      .arrow {
-        position: absolute;
-        top: -10px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 0;
-        height: 0;
-        border-left: 20px solid transparent;
-        border-right: 20px solid transparent;
-        border-top: 40px solid red;
-        z-index: 10;
-      }
-
-      button {
-        margin-top: 20px;
-        width: 100%;
-        padding: 12px;
-        border: none;
-        border-radius: 10px;
-        background: #00b894;
-        color: white;
-        font-size: 18px;
-        cursor: pointer;
-      }
-
-      button:hover {
-        background: #00a383;
-      }
-
-      .panel {
-        width: 300px;
-      }
-
-      textarea {
-        width: 100%;
-        height: 300px;
-        border-radius: 10px;
-        padding: 10px;
-        font-size: 16px;
-        resize: none;
-        border: none;
-        outline: none;
-      }
-
-      .result {
-        margin-top: 20px;
-        font-size: 24px;
-        font-weight: bold;
-        text-align: center;
-        color: #ffeaa7;
-      }
-    </style>
+    <link rel="stylesheet" href="/style/style.css" />
   </head>
+
   <body>
-    <div class="wheel-container">
-      <div class="arrow"></div>
-      <canvas id="wheel" width="500" height="500"></canvas>
+    <audio id="spinSound" src="spin.mp3"></audio>
 
-      <button id="spinBtn">Крутить рулетку</button>
+    <div class="container">
+      <div class="wheel-container">
+        <div class="arrow"></div>
 
-      <div class="result" id="result"></div>
+        <canvas id="wheel" width="500" height="500"></canvas>
+
+        <button id="spinBtn">Крутить рулетку</button>
+
+        <div class="result" id="result"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Список Участников</h2>
+
+        <textarea id="names">
+Tavashnikov 
+Vafir
+Tommy
+Holand
+Awurakai
+Dominium
+Niveraa
+        </textarea>
+      </div>
     </div>
 
-    <div class="panel">
-      <h2>Список данных</h2>
-
-      <p>Каждая строка = отдельное имя</p>
-
-      <textarea id="names">
-    Сёрчер    
-    </textarea
-      >
-    </div>
-
-    <script>
-      const canvas = document.getElementById("wheel");
-      const ctx = canvas.getContext("2d");
-
-      const spinBtn = document.getElementById("spinBtn");
-      const namesInput = document.getElementById("names");
-      const resultDiv = document.getElementById("result");
-
-      let rotation = 0;
-      let spinning = false;
-
-      const colors = [
-        "#e74c3c",
-        "#3498db",
-        "#2ecc71",
-        "#f1c40f",
-        "#9b59b6",
-        "#1abc9c",
-        "#e67e22",
-        "#fd79a8",
-      ];
-
-      function getNames() {
-        return namesInput.value
-          .split("\n")
-          .map((n) => n.trim())
-          .filter((n) => n);
-      }
-
-      function drawWheel() {
-        const names = getNames();
-
-        const arc = (Math.PI * 2) / names.length;
-
-        ctx.clearRect(0, 0, 500, 500);
-
-        names.forEach((name, index) => {
-          const angle = index * arc + rotation;
-
-          ctx.beginPath();
-          ctx.moveTo(250, 250);
-          ctx.arc(250, 250, 250, angle, angle + arc);
-          ctx.fillStyle = colors[index % colors.length];
-          ctx.fill();
-
-          ctx.save();
-
-          ctx.translate(250, 250);
-          ctx.rotate(angle + arc / 2);
-
-          ctx.fillStyle = "white";
-          ctx.font = "20px Arial";
-          ctx.textAlign = "right";
-
-          ctx.fillText(name, 220, 10);
-
-          ctx.restore();
-        });
-      }
-
-      drawWheel();
-
-      namesInput.addEventListener("input", drawWheel);
-
-      spinBtn.addEventListener("click", () => {
-        document.getElementById("spinSound").play();
-        if (spinning) return;
-
-        spinning = true;
-
-        const names = getNames();
-
-        const extraSpin = Math.random() * 360 + 1440;
-        const duration = 4000;
-
-        const start = performance.now();
-        const startRotation = rotation;
-
-        function animate(time) {
-          const progress = Math.min((time - start) / duration, 1);
-
-          const easeOut = 1 - Math.pow(1 - progress, 3);
-
-          rotation = startRotation + ((extraSpin * Math.PI) / 180) * easeOut;
-
-          drawWheel();
-
-          if (progress < 1) {
-            requestAnimationFrame(animate);
-          } else {
-            spinning = false;
-
-            const normalized =
-              (Math.PI * 2 - (rotation % (Math.PI * 2))) % (Math.PI * 2);
-
-            const arc = (Math.PI * 2) / names.length;
-
-            const index = Math.floor(normalized / arc) % names.length;
-
-            resultDiv.textContent = "Выпало: " + names[index];
-          }
-        }
-
-        requestAnimationFrame(animate);
-      });
-    </script>
+    <script src="/scrypts/script.js"></script>
   </body>
 </html>
