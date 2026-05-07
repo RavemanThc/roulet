@@ -1,7 +1,7 @@
 const canvas = document.getElementById("wheel");
 const ctx = canvas.getContext("2d");
 const bgImage = new Image();
-bgImage.src = "ROULET/plugins/bg.jpg";
+bgImage.src = "roulet/plugins/bg.jpg";
 const spinBtn = document.getElementById("spinBtn");
 const namesInput = document.getElementById("names");
 const resultDiv = document.getElementById("result");
