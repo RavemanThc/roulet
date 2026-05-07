@@ -1,6 +1,7 @@
 const canvas = document.getElementById("wheel");
 const ctx = canvas.getContext("2d");
-
+const bgImage = new Image();
+bgImage.src = "../plugins/bg.jpg";
 const spinBtn = document.getElementById("spinBtn");
 const namesInput = document.getElementById("names");
 const resultDiv = document.getElementById("result");
@@ -33,21 +34,47 @@ function getNames() {
 function drawWheel() {
   const names = getNames();
 
-  if (names.length === 0) return;
+  ctx.clearRect(0, 0, 500, 500);
+
+  /* ========================= */
+  /* ФОНОВОЕ ИЗОБРАЖЕНИЕ */
+  /* ========================= */
+
+  ctx.save();
+
+  ctx.beginPath();
+  ctx.arc(250, 250, 250, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.clip();
+
+  ctx.drawImage(bgImage, 0, 0, 500, 500);
+
+  ctx.restore();
+
+  /* ========================= */
+  /* ЕСЛИ НЕТ ИМЁН */
+  /* ========================= */
+
+  if (names.length === 0) {
+    return;
+  }
 
   const arc = (Math.PI * 2) / names.length;
-
-  ctx.clearRect(0, 0, 500, 500);
 
   names.forEach((name, index) => {
     const angle = index * arc + rotation;
 
     ctx.beginPath();
+
     ctx.moveTo(250, 250);
 
     ctx.arc(250, 250, 250, angle, angle + arc);
 
-    ctx.fillStyle = colors[index % colors.length];
+    /* ========================= */
+    /* ПРОЗРАЧНЫЕ СЕКТОРА */
+    /* ========================= */
+
+    ctx.fillStyle = colors[index % colors.length] + "66";
 
     ctx.fill();
 
@@ -58,7 +85,9 @@ function drawWheel() {
     ctx.rotate(angle + arc / 2);
 
     ctx.fillStyle = "white";
+
     ctx.font = "20px Arial";
+
     ctx.textAlign = "right";
 
     ctx.fillText(name, 220, 10);
@@ -66,7 +95,6 @@ function drawWheel() {
     ctx.restore();
   });
 }
-
 drawWheel();
 
 namesInput.addEventListener("input", drawWheel);
