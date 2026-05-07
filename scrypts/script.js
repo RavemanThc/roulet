@@ -98,15 +98,24 @@ function drawWheel() {
 drawWheel();
 
 namesInput.addEventListener("input", drawWheel);
-
 function getWinner() {
   const names = getNames();
 
-  const normalized = (Math.PI * 2 - (rotation % (Math.PI * 2))) % (Math.PI * 2);
+  if (names.length === 0) return;
 
   const arc = (Math.PI * 2) / names.length;
 
+  /* ========================= */
+  /* СМЕЩЕНИЕ ДЛЯ СТРЕЛКИ СВЕРХУ */
+  /* ========================= */
+
+  const pointerAngle = Math.PI / 2;
+
+  const normalized =
+    (Math.PI * 2 - ((rotation + pointerAngle) % (Math.PI * 2))) % (Math.PI * 2);
+
   const index = Math.floor(normalized / arc) % names.length;
+  console.log(names[index]);
 
   resultDiv.textContent = "Выпало: " + names[index];
 }
