@@ -4,11 +4,10 @@ const ctx = canvas.getContext("2d");
 const spinBtn = document.getElementById("spinBtn");
 const namesInput = document.getElementById("names");
 const resultDiv = document.getElementById("result");
-const spinSound = document.getElementById("spinSound");
 
-/* ========================= */
-/* КАРТИНКИ И МУЗЫКА */
-/* ========================= */
+/* ====================================================== */
+/*                       НАСТРОЙКИ                         */
+/* ====================================================== */
 
 const backgrounds = [
   "./plugins/bg1.jpg",
@@ -22,48 +21,6 @@ const sounds = [
   "./sounds/spin3.mp3",
 ];
 
-const bgImage = new Image();
-
-/* ========================= */
-/* LOCAL STORAGE */
-/* ========================= */
-
-const savedNames = localStorage.getItem("wheelNames");
-
-if (savedNames) {
-  namesInput.value = savedNames;
-}
-
-let mediaIndex = Number(localStorage.getItem("mediaIndex"));
-
-if (Number.isNaN(mediaIndex)) {
-  mediaIndex = -1;
-}
-
-/* ========================= */
-/* СТАРТОВАЯ КАРТИНКА */
-/* ========================= */
-
-const initialBackgroundIndex =
-  mediaIndex >= 0 ? mediaIndex % backgrounds.length : 0;
-
-bgImage.src = backgrounds[initialBackgroundIndex];
-
-/* ========================= */
-/* СОСТОЯНИЕ */
-/* ========================= */
-
-let rotation = 0;
-let spinning = false;
-let animationFrame = null;
-
-let isDragging = false;
-let lastAngle = 0;
-
-/* ========================= */
-/* ЦВЕТА СЕКТОРОВ */
-/* ========================= */
-
 const colors = [
   "#e74c3c",
   "#3498db",
@@ -75,20 +32,154 @@ const colors = [
   "#fd79a8",
 ];
 
-/* ========================= */
-/* ПОЛУЧАЕМ ИМЕНА */
-/* ========================= */
+/* ====================================================== */
+/*                    LOCAL STORAGE                        */
+/* ====================================================== */
+
+const savedNames = localStorage.getItem("wheelNames");
+
+if (savedNames !== null) {
+  namesInput.value = savedNames;
+}
+
+namesInput.addEventListener("input", () => {
+  localStorage.setItem("wheelNames", namesInput.value);
+
+  drawWheel();
+});
+
+/* ====================================================== */
+/*                   ПРЕДЗАГРУЗКА КАРТИНОК                 */
+/* ====================================================== */
+
+const backgroundImages = backgrounds.map((src) => {
+  const image = new Image();
+
+  image.src = src;
+
+  image.addEventListener("load", () => {
+    console.log("Картинка загружена:", src);
+
+    drawWheel();
+  });
+
+  image.addEventListener("error", () => {
+    console.error("Не удалось загрузить картинку:", src);
+  });
+
+  return image;
+});
+
+/* ====================================================== */
+/*                    ПРЕДЗАГРУЗКА МУЗЫКИ                  */
+/* ====================================================== */
+
+const audioTracks = sounds.map((src) => {
+  const audio = new Audio();
+
+  audio.src = src;
+  audio.preload = "auto";
+  audio.loop = true;
+
+  audio.addEventListener("canplaythrough", () => {
+    console.log("Музыка готова:", src);
+  });
+
+  audio.addEventListener("error", () => {
+    console.error("Не удалось загрузить музыку:", src);
+  });
+
+  audio.load();
+
+  return audio;
+});
+
+/* ====================================================== */
+/*                       СОСТОЯНИЕ                          */
+/* ====================================================== */
+
+let rotation = 0;
+
+let spinning = false;
+
+let animationFrame = null;
+
+let mediaIndex = -1;
+
+let currentBackground = backgroundImages[0];
+
+let currentAudio = null;
+
+let isDragging = false;
+
+let lastAngle = 0;
+
+/* ====================================================== */
+/*                       ИМЕНА                              */
+/* ====================================================== */
 
 function getNames() {
   return namesInput.value
     .split("\n")
     .map((name) => name.trim())
-    .filter((name) => name);
+    .filter(Boolean);
 }
 
-/* ========================= */
-/* РИСУЕМ РУЛЕТКУ */
-/* ========================= */
+/* ====================================================== */
+/*                  СЛЕДУЮЩАЯ КАРТИНКА                     */
+/*                  И СЛЕДУЮЩАЯ МУЗЫКА                     */
+/* ====================================================== */
+
+function changeMedia() {
+  /*
+    Если картинок и песен одинаковое количество:
+
+    0 -> bg1 + spin1
+    1 -> bg2 + spin2
+    2 -> bg3 + spin3
+    0 -> bg1 + spin1
+  */
+
+  mediaIndex++;
+
+  const maxMedia = Math.max(backgroundImages.length, audioTracks.length);
+
+  mediaIndex %= maxMedia;
+
+  const backgroundIndex = mediaIndex % backgroundImages.length;
+
+  const audioIndex = mediaIndex % audioTracks.length;
+
+  currentBackground = backgroundImages[backgroundIndex];
+
+  /*
+    На всякий случай останавливаем
+    предыдущую музыку.
+  */
+
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio.currentTime = 0;
+  }
+
+  currentAudio = audioTracks[audioIndex];
+
+  currentAudio.currentTime = 0;
+  currentAudio.volume = 1;
+  currentAudio.loop = true;
+
+  console.log(
+    `Запуск ${mediaIndex + 1}:`,
+    backgrounds[backgroundIndex],
+    sounds[audioIndex],
+  );
+
+  drawWheel();
+}
+
+/* ====================================================== */
+/*                     ОТРИСОВКА                           */
+/* ====================================================== */
 
 function drawWheel() {
   const names = getNames();
@@ -103,9 +194,9 @@ function drawWheel() {
 
   ctx.clearRect(0, 0, width, height);
 
-  /* ========================= */
-  /* ФОНОВАЯ КАРТИНКА */
-  /* ========================= */
+  /* ==================================================== */
+  /*                 ФОНОВАЯ КАРТИНКА                     */
+  /* ==================================================== */
 
   ctx.save();
 
@@ -120,37 +211,62 @@ function drawWheel() {
   ctx.translate(centerX, centerY);
 
   /*
-    ФОН КРУТИТСЯ В ОБРАТНУЮ
-    СТОРОНУ ОТ РУЛЕТКИ
+    РУЛЕТКА:
+
+        ↻
+
+    КАРТИНКА:
+
+        ↺
+
+    Поэтому здесь MINUS rotation.
   */
 
   ctx.rotate(-rotation);
 
   /*
-    Делаем изображение больше,
-    чтобы при вращении
-    не было пустых углов.
+    Делаем изображение квадратом чуть больше колеса.
+
+    Если хочешь, чтобы фон вращался
+    быстрее рулетки:
+
+    ctx.rotate(-rotation * 2);
+
+    Но тогда предыдущий ctx.rotate(-rotation)
+    нужно заменить, а не добавлять второй.
   */
 
   const imageSize = radius * 2.85;
 
-  ctx.drawImage(bgImage, -imageSize / 2, -imageSize / 2, imageSize, imageSize);
+  if (
+    currentBackground &&
+    currentBackground.complete &&
+    currentBackground.naturalWidth > 0
+  ) {
+    ctx.drawImage(
+      currentBackground,
+      -imageSize / 2,
+      -imageSize / 2,
+      imageSize,
+      imageSize,
+    );
+  }
 
   ctx.restore();
 
-  /* ========================= */
-  /* ЕСЛИ ИМЁН НЕТ */
-  /* ========================= */
+  /* ==================================================== */
+  /*                    НЕТ ИМЁН                           */
+  /* ==================================================== */
 
   if (names.length === 0) {
     return;
   }
 
-  const arc = (Math.PI * 2) / names.length;
+  /* ==================================================== */
+  /*                       СЕКТОРА                         */
+  /* ==================================================== */
 
-  /* ========================= */
-  /* СЕКТОРА */
-  /* ========================= */
+  const arc = (Math.PI * 2) / names.length;
 
   names.forEach((name, index) => {
     const angle = index * arc + rotation;
@@ -163,27 +279,21 @@ function drawWheel() {
 
     ctx.closePath();
 
-    /* ========================= */
-    /* ЦВЕТ СЕКТОРА */
-    /* ========================= */
+    /* прозрачный цвет */
 
     ctx.fillStyle = colors[index % colors.length] + "66";
 
     ctx.fill();
 
-    /* ========================= */
-    /* РАЗДЕЛИТЕЛИ */
-    /* ========================= */
+    /* границы */
 
-    ctx.strokeStyle = "rgba(255,255,255,0.4)";
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
 
     ctx.lineWidth = 2;
 
     ctx.stroke();
 
-    /* ========================= */
-    /* ТЕКСТ */
-    /* ========================= */
+    /* текст */
 
     ctx.save();
 
@@ -191,7 +301,7 @@ function drawWheel() {
 
     ctx.rotate(angle + arc / 2);
 
-    ctx.fillStyle = "white";
+    ctx.fillStyle = "#ffffff";
 
     ctx.font = "20px Arial";
 
@@ -204,9 +314,9 @@ function drawWheel() {
     ctx.restore();
   });
 
-  /* ========================= */
-  /* ЦЕНТРАЛЬНЫЙ КРУГ */
-  /* ========================= */
+  /* ==================================================== */
+  /*                    ЦЕНТР КОЛЕСА                       */
+  /* ==================================================== */
 
   ctx.beginPath();
 
@@ -217,59 +327,9 @@ function drawWheel() {
   ctx.fill();
 }
 
-/* ========================= */
-/* ПОСЛЕ ЗАГРУЗКИ КАРТИНКИ */
-/* ========================= */
-
-bgImage.addEventListener("load", () => {
-  drawWheel();
-});
-
-/* ========================= */
-/* ПЕРВАЯ ОТРИСОВКА */
-/* ========================= */
-
-drawWheel();
-
-/* ========================= */
-/* СОХРАНЕНИЕ ИМЁН */
-/* ========================= */
-
-namesInput.addEventListener("input", () => {
-  localStorage.setItem("wheelNames", namesInput.value);
-
-  drawWheel();
-});
-
-/* ========================= */
-/* СМЕНА КАРТИНКИ И МУЗЫКИ */
-/* ========================= */
-
-function changeMedia() {
-  const maxLength = Math.max(backgrounds.length, sounds.length);
-
-  mediaIndex = (mediaIndex + 1) % maxLength;
-
-  localStorage.setItem("mediaIndex", mediaIndex);
-
-  /* Картинка */
-
-  const backgroundIndex = mediaIndex % backgrounds.length;
-
-  bgImage.src = backgrounds[backgroundIndex];
-
-  /* Музыка */
-
-  const soundIndex = mediaIndex % sounds.length;
-
-  spinSound.src = sounds[soundIndex];
-
-  spinSound.load();
-}
-
-/* ========================= */
-/* ОПРЕДЕЛЕНИЕ ПОБЕДИТЕЛЯ */
-/* ========================= */
+/* ====================================================== */
+/*                    ПОБЕДИТЕЛЬ                           */
+/* ====================================================== */
 
 function getWinner() {
   const names = getNames();
@@ -281,13 +341,19 @@ function getWinner() {
   const arc = (Math.PI * 2) / names.length;
 
   /*
-    Если стрелка сверху.
+    Стрелка сверху.
+
+    Если у тебя стрелка физически
+    находится в другом месте,
+    тогда меняется pointerAngle.
   */
 
   const pointerAngle = Math.PI / 2;
 
+  const fullCircle = Math.PI * 2;
+
   const normalized =
-    (Math.PI * 2 - ((rotation + pointerAngle) % (Math.PI * 2))) % (Math.PI * 2);
+    (fullCircle - ((rotation + pointerAngle) % fullCircle)) % fullCircle;
 
   const index = Math.floor(normalized / arc) % names.length;
 
@@ -298,17 +364,31 @@ function getWinner() {
   resultDiv.textContent = "Выпало: " + winner;
 }
 
-/* ========================= */
-/* EASING */
-/* ========================= */
+/* ====================================================== */
+/*                        EASING                            */
+/* ====================================================== */
 
 function easeOutCubic(t) {
   return 1 - Math.pow(1 - t, 3);
 }
 
-/* ========================= */
-/* ЗАПУСК РУЛЕТКИ */
-/* ========================= */
+/* ====================================================== */
+/*                     ОСТАНОВКА AUDIO                      */
+/* ====================================================== */
+
+function stopCurrentAudio() {
+  if (!currentAudio) {
+    return;
+  }
+
+  currentAudio.pause();
+
+  currentAudio.currentTime = 0;
+}
+
+/* ====================================================== */
+/*                      START SPIN                          */
+/* ====================================================== */
 
 function startSpin() {
   if (spinning) {
@@ -329,71 +409,114 @@ function startSpin() {
 
   resultDiv.textContent = "";
 
-  /* ========================= */
-  /* НОВАЯ КАРТИНКА + МУЗЫКА */
-  /* ========================= */
+  /* ==================================================== */
+  /*            СЛЕДУЮЩАЯ КАРТИНКА + ПЕСНЯ                */
+  /* ==================================================== */
 
   changeMedia();
 
-  /* ========================= */
-  /* 10–15 СЕКУНД */
-  /* ========================= */
+  /* ==================================================== */
+  /*                  МУЗЫКА СТАРТУЕТ                      */
+  /* ==================================================== */
 
-  const duration = Math.random() * 5000 + 10000;
+  /*
+    Это вызывается непосредственно
+    после click / mouseup / touchend.
 
-  console.log("Время вращения:", (duration / 1000).toFixed(2), "сек");
+    Поэтому браузер считает это
+    пользовательским действием и
+    разрешает воспроизведение.
+  */
 
-  /* ========================= */
-  /* КОЛИЧЕСТВО ОБОРОТОВ */
-  /* ========================= */
+  if (currentAudio) {
+    currentAudio.currentTime = 0;
 
-  const turns = Math.random() * 8 + 15;
+    currentAudio
+      .play()
+      .then(() => {
+        console.log("Музыка запущена:", currentAudio.src);
+      })
+      .catch((error) => {
+        console.error("Браузер не запустил музыку:", error);
+      });
+  }
+
+  /* ==================================================== */
+  /*                ВРЕМЯ 10 - 15 СЕКУНД                  */
+  /* ==================================================== */
+
+  const duration = 10000 + Math.random() * 5000;
+
+  console.log("Продолжительность:", (duration / 1000).toFixed(2), "секунд");
+
+  /* ==================================================== */
+  /*                 КОЛИЧЕСТВО ОБОРОТОВ                  */
+  /* ==================================================== */
+
+  /*
+    18 - 26 оборотов.
+
+    Начинает быстро и постепенно
+    замедляется.
+  */
+
+  const turns = 18 + Math.random() * 8;
 
   const startRotation = rotation;
 
   const targetRotation = startRotation + Math.PI * 2 * turns;
 
-  const startTime = performance.now();
+  /* ==================================================== */
+  /*                 СЧЁТЧИК ВРЕМЕНИ                      */
+  /* ==================================================== */
 
-  /* ========================= */
-  /* ЗАПУСК МУЗЫКИ */
-  /* ========================= */
+  let elapsed = 0;
 
-  spinSound.pause();
+  let previousTime = null;
 
-  spinSound.currentTime = 0;
-
-  /*
-    Музыка повторяется,
-    если закончилась раньше рулетки.
-  */
-
-  spinSound.loop = true;
-
-  spinSound.volume = 1;
-
-  spinSound.play().catch((error) => {
-    console.log("Ошибка воспроизведения:", error);
-  });
-
-  /* ========================= */
-  /* АНИМАЦИЯ */
-  /* ========================= */
+  /* ==================================================== */
+  /*                    ANIMATION                          */
+  /* ==================================================== */
 
   function animate(currentTime) {
-    const elapsed = currentTime - startTime;
+    /*
+      Первый requestAnimationFrame.
+    */
+
+    if (previousTime === null) {
+      previousTime = currentTime;
+    }
+
+    let delta = currentTime - previousTime;
+
+    previousTime = currentTime;
+
+    /*
+      ЭТО ВАЖНО ДЛЯ GITHUB PAGES / МОБИЛЬНЫХ / ЛАГОВ.
+
+      Если браузер завис на 2 секунды,
+      мы НЕ добавляем сразу эти 2 секунды
+      к анимации.
+
+      Один кадр максимум считается
+      как 50 ms.
+    */
+
+    delta = Math.min(delta, 50);
+
+    elapsed += delta;
 
     const progress = Math.min(elapsed / duration, 1);
 
-    const eased = easeOutCubic(progress);
+    const easedProgress = easeOutCubic(progress);
 
-    rotation = startRotation + (targetRotation - startRotation) * eased;
+    rotation = startRotation + (targetRotation - startRotation) * easedProgress;
 
     drawWheel();
 
-    /* ========================= */
-    /* ПРОДОЛЖАЕМ */
-    /* ========================= */
+    /* ================================================== */
+    /*                   ПРОДОЛЖАЕМ                        */
+    /* ================================================== */
 
     if (progress < 1) {
       animationFrame = requestAnimationFrame(animate);
@@ -401,61 +524,63 @@ function startSpin() {
       return;
     }
 
-    /* ========================= */
-    /* ОСТАНОВКА */
-    /* ========================= */
+    /* ================================================== */
+    /*                   ФИНИШ                             */
+    /* ================================================== */
 
     rotation = targetRotation;
 
     spinning = false;
 
+    animationFrame = null;
+
     drawWheel();
 
-    /* ========================= */
-    /* ОСТАНОВКА МУЗЫКИ */
-    /* ========================= */
+    /*
+      Музыка заканчивается
+      В ТОТ ЖЕ МОМЕНТ,
+      когда остановилась рулетка.
+    */
 
-    spinSound.pause();
-
-    spinSound.currentTime = 0;
-
-    spinSound.loop = false;
-
-    /* ========================= */
-    /* ПОБЕДИТЕЛЬ */
-    /* ========================= */
+    stopCurrentAudio();
 
     getWinner();
   }
 
-  cancelAnimationFrame(animationFrame);
+  if (animationFrame) {
+    cancelAnimationFrame(animationFrame);
+  }
 
   animationFrame = requestAnimationFrame(animate);
 }
 
-/* ========================= */
-/* КНОПКА */
-/* ========================= */
+/* ====================================================== */
+/*                       КНОПКА                            */
+/* ====================================================== */
 
 spinBtn.addEventListener("click", startSpin);
 
-/* ========================= */
-/* УГОЛ МЫШКИ */
-/* ========================= */
+/* ====================================================== */
+/*                 УГОЛ МЫШКИ / ПАЛЬЦА                    */
+/* ====================================================== */
 
 function getPointerAngle(event) {
   const rect = canvas.getBoundingClientRect();
 
-  const x = event.clientX - rect.left - rect.width / 2;
+  const scaleX = canvas.width / rect.width;
 
-  const y = event.clientY - rect.top - rect.height / 2;
+  const scaleY = canvas.height / rect.height;
+
+  const x = (event.clientX - rect.left) * scaleX - canvas.width / 2;
+
+  const y = (event.clientY - rect.top) * scaleY - canvas.height / 2;
 
   return Math.atan2(y, x);
 }
 
-/* ========================= */
-/* MOUSE DOWN */
-/* ========================= */
+/* ====================================================== */
+/*                       MOUSE                             */
+/* ====================================================== */
 
 canvas.addEventListener("mousedown", (event) => {
   if (spinning) {
@@ -467,10 +592,6 @@ canvas.addEventListener("mousedown", (event) => {
   lastAngle = getPointerAngle(event);
 });
 
-/* ========================= */
-/* MOUSE MOVE */
-/* ========================= */
-
 window.addEventListener("mousemove", (event) => {
   if (!isDragging || spinning) {
     return;
@@ -481,9 +602,12 @@ window.addEventListener("mousemove", (event) => {
   let delta = currentAngle - lastAngle;
 
   /*
-      Убираем скачок
-      при переходе через
-      -PI / +PI
+      Исправляем переход:
+
+      PI -> -PI
+
+      чтобы колесо не совершало
+      огромный скачок.
     */
 
   if (delta > Math.PI) {
@@ -501,10 +625,6 @@ window.addEventListener("mousemove", (event) => {
   drawWheel();
 });
 
-/* ========================= */
-/* MOUSE UP */
-/* ========================= */
-
 window.addEventListener("mouseup", () => {
   if (!isDragging) {
     return;
@@ -512,19 +632,12 @@ window.addEventListener("mouseup", () => {
 
   isDragging = false;
 
-  /*
-      После того как пользователь
-      бросил колесо мышкой,
-      запускаем полноценный spin
-      на 10–15 секунд.
-    */
-
   startSpin();
 });
 
-/* ========================= */
-/* TOUCH START */
-/* ========================= */
+/* ====================================================== */
+/*                       TOUCH                             */
+/* ====================================================== */
 
 canvas.addEventListener(
   "touchstart",
@@ -535,9 +648,13 @@ canvas.addEventListener(
 
     event.preventDefault();
 
-    isDragging = true;
-
     const touch = event.touches[0];
+
+    if (!touch) {
+      return;
+    }
+
+    isDragging = true;
 
     lastAngle = getPointerAngle(touch);
   },
@@ -546,11 +663,7 @@ canvas.addEventListener(
   },
 );
 
-/* ========================= */
-/* TOUCH MOVE */
-/* ========================= */
-
-window.addEventListener(
+canvas.addEventListener(
   "touchmove",
   (event) => {
     if (!isDragging || spinning) {
@@ -560,6 +673,10 @@ window.addEventListener(
     event.preventDefault();
 
     const touch = event.touches[0];
+
+    if (!touch) {
+      return;
+    }
 
     const currentAngle = getPointerAngle(touch);
 
@@ -584,16 +701,54 @@ window.addEventListener(
   },
 );
 
-/* ========================= */
-/* TOUCH END */
-/* ========================= */
+canvas.addEventListener(
+  "touchend",
+  (event) => {
+    if (!isDragging) {
+      return;
+    }
 
-window.addEventListener("touchend", () => {
-  if (!isDragging) {
+    event.preventDefault();
+
+    isDragging = false;
+
+    startSpin();
+  },
+  {
+    passive: false,
+  },
+);
+
+/* ====================================================== */
+/*               ПОВЕДЕНИЕ ПРИ СКРЫТИИ ВКЛАДКИ            */
+/* ====================================================== */
+
+/*
+  requestAnimationFrame может тормозиться,
+  когда вкладка скрыта.
+
+  Поэтому если человек свернул браузер,
+  музыку тоже ставим на паузу.
+
+  После возвращения продолжаем.
+*/
+
+document.addEventListener("visibilitychange", () => {
+  if (!spinning || !currentAudio) {
     return;
   }
 
-  isDragging = false;
+  if (document.hidden) {
+    currentAudio.pause();
 
-  startSpin();
+    return;
+  }
+
+  currentAudio.play().catch(() => {});
 });
+
+/* ====================================================== */
+/*                   ПЕРВАЯ ОТРИСОВКА                      */
+/* ====================================================== */
+
+drawWheel();
